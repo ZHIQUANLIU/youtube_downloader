@@ -14,7 +14,7 @@ class YouTubeDownloader:
     def __init__(self, root):
         self.root = root
         self.root.title("YouTube视频下载器")
-        self.root.geometry("650x500")
+        self.root.geometry("650x550")
         self.root.resizable(False, False)
 
         self.url_entry = None
@@ -22,6 +22,10 @@ class YouTubeDownloader:
         self.status_label = None
         self.download_thread = None
         self.format_var = None
+        self.quality_var = None
+        self.bitrate_var = None
+        self.quality_combo = None
+        self.bitrate_combo = None
         self.batch_listbox = None
         self.batch_progress = None
 
@@ -65,11 +69,31 @@ class YouTubeDownloader:
         self.format_var = tk.StringVar(value="mp4")
         formats = [
             ("MP4视频", "mp4"),
-            ("MP3音频(需要FFmpeg)", "mp3"),
+            ("MP3音频", "mp3"),
             ("WEBM视频", "webm"),
         ]
         for text, value in formats:
-            ttk.Radiobutton(format_frame, text=text, variable=self.format_var, value=value).pack(side=tk.LEFT, padx=8)
+            ttk.Radiobutton(format_frame, text=text, variable=self.format_var, value=value, command=self.update_quality_options).pack(side=tk.LEFT, padx=8)
+
+        quality_frame = ttk.Frame(self.single_frame)
+        quality_frame.pack(pady=8)
+
+        ttk.Label(quality_frame, text="视频质量:", font=("Arial", 11)).pack(side=tk.LEFT)
+        
+        self.quality_var = tk.StringVar(value="best")
+        self.quality_combo = ttk.Combobox(quality_frame, textvariable=self.quality_var, width=15, state="readonly")
+        self.quality_combo['values'] = ("最高", "1080p", "720p", "480p", "360p", "最低")
+        self.quality_combo.current(0)
+        self.quality_combo.pack(side=tk.LEFT, padx=10)
+
+        ttk.Label(quality_frame, text="MP3码率:", font=("Arial", 11)).pack(side=tk.LEFT, padx=(20, 0))
+        
+        self.bitrate_var = tk.StringVar(value="192")
+        self.bitrate_combo = ttk.Combobox(quality_frame, textvariable=self.bitrate_var, width=10, state="readonly")
+        self.bitrate_combo['values'] = ("320", "256", "192", "128", "64")
+        self.bitrate_combo.current(2)
+        self.bitrate_combo.pack(side=tk.LEFT, padx=10)
+        self.quality_combo.bind("<<ComboboxSelected>>", lambda e: self.update_quality_options())
 
         self.progress_bar = ttk.Progressbar(self.single_frame, mode='determinate', length=400)
         self.progress_bar.pack(pady=10)
@@ -85,6 +109,15 @@ class YouTubeDownloader:
 
         clear_btn = ttk.Button(btn_frame, text="清空", command=self.clear_input)
         clear_btn.pack(side=tk.LEFT, padx=10)
+
+    def update_quality_options(self):
+        selected = self.format_var.get()
+        if selected == "mp3":
+            self.quality_combo.config(state="disabled")
+            self.bitrate_combo.config(state="readonly")
+        else:
+            self.quality_combo.config(state="readonly")
+            self.bitrate_combo.config(state="disabled")
 
     def setup_batch_ui(self):
         title_label = ttk.Label(self.batch_frame, text="批量下载", font=("Arial", 14, "bold"))
@@ -142,6 +175,9 @@ class YouTubeDownloader:
 
         self.status_label.config(text="下载中...")
         
+        quality_map = {"最高": "best", "1080p": "bestvideo[height<=1080]+bestaudio/best", "720p": "bestvideo[height<=720]+bestaudio/best", "480p": "bestvideo[height<=480]+bestaudio/best", "360p": "bestvideo[height<=360]+bestaudio/best", "最低": "worst"}
+        bitrate_map = {"320": "320", "256": "256", "192": "192", "128": "128", "64": "64"}
+        
         def download_thread():
             try:
                 if selected_format == "mp3":
@@ -149,20 +185,23 @@ class YouTubeDownloader:
                     if not ffmpeg_path:
                         self.root.after(0, messagebox.showerror, "错误", "下载 MP3 需要 FFmpeg。请安装 FFmpeg 或将 ffmpeg.exe 放到程序目录的 ffmpeg_bin 文件夹中。")
                         return
+                    bitrate = self.bitrate_var.get()
                     ydl_opts = {
                         'format': 'bestaudio/best',
                         'outtmpl': os.path.join(folder_selected, '%(title)s.%(ext)s'),
                         'postprocessors': [{
                             'key': 'FFmpegExtractAudio',
                             'preferredcodec': 'mp3',
-                            'preferredquality': '192',
+                            'preferredquality': bitrate,
                         }],
                         'ffmpeg_location': ffmpeg_path,
                         'quiet': True,
                     }
                 else:
+                    quality = self.quality_var.get()
+                    video_format = quality_map.get(quality, "best")
                     ydl_opts = {
-                        'format': 'best',
+                        'format': video_format,
                         'outtmpl': os.path.join(folder_selected, '%(title)s.%(ext)s'),
                         'quiet': True,
                     }
@@ -302,6 +341,7 @@ class YouTubeDownloader:
 
     def download_single_video(self, url, output_path):
         selected_format = self.format_var.get()
+        quality_map = {"最高": "best", "1080p": "bestvideo[height<=1080]+bestaudio/best", "720p": "bestvideo[height<=720]+bestaudio/best", "480p": "bestvideo[height<=480]+bestaudio/best", "360p": "bestvideo[height<=360]+bestaudio/best", "最低": "worst"}
         
         def progress_hook(d):
             if d['status'] == 'downloading':
@@ -315,6 +355,7 @@ class YouTubeDownloader:
             ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
             if not ffmpeg_path:
                 raise Exception("需要 FFmpeg 才能下载 MP3。请安装 FFmpeg 或将 ffmpeg.exe 放到程序目录的 ffmpeg_bin 文件夹中。")
+            bitrate = self.bitrate_var.get()
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
@@ -322,18 +363,18 @@ class YouTubeDownloader:
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
-                    'preferredquality': '192',
+                    'preferredquality': bitrate,
                 }],
                 'ffmpeg_location': ffmpeg_path,
                 'quiet': True,
             }
         else:
-            ffmpeg_path = self.find_ffmpeg()
+            quality = self.quality_var.get()
+            video_format = quality_map.get(quality, "best")
             ydl_opts = {
-                'format': 'bestvideo+bestaudio/best',
+                'format': video_format,
                 'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
                 'progress_hooks': [progress_hook],
-                'ffmpeg_location': ffmpeg_path,
                 'quiet': True,
             }
         
