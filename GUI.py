@@ -160,12 +160,16 @@ class YouTubeDownloader:
         url = self.url_entry.get().strip()
         selected_format = self.format_var.get()
         
+        def is_valid_url(url):
+            valid_sites = ["youtube.com", "youtu.be", "bilibili.com", "b23.tv"]
+            return any(site in url for site in valid_sites)
+        
         if not url:
             messagebox.showwarning("警告", "请输入视频链接")
             return
 
-        if "youtube.com" not in url and "youtu.be" not in url:
-            messagebox.showwarning("警告", "请输入有效的YouTube链接")
+        if not is_valid_url(url):
+            messagebox.showwarning("警告", "请输入有效的YouTube或哔哩哔哩链接")
             return
 
         folder_selected = filedialog.askdirectory(title="选择保存位置")
@@ -199,10 +203,16 @@ class YouTubeDownloader:
                     }
                 else:
                     quality = self.quality_var.get()
-                    video_format = quality_map.get(quality, "best")
+                    if "bilibili" in url:
+                        ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
+                        video_format = "bestvideo+bestaudio/best"
+                    else:
+                        ffmpeg_path = self.find_ffmpeg()
+                        video_format = quality_map.get(quality, "best")
                     ydl_opts = {
                         'format': video_format,
                         'outtmpl': os.path.join(folder_selected, '%(title)s.%(ext)s'),
+                        'ffmpeg_location': ffmpeg_path,
                         'quiet': True,
                     }
                 
@@ -370,11 +380,17 @@ class YouTubeDownloader:
             }
         else:
             quality = self.quality_var.get()
-            video_format = quality_map.get(quality, "best")
+            if "bilibili" in url:
+                ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
+                video_format = "bestvideo+bestaudio/best"
+            else:
+                ffmpeg_path = self.find_ffmpeg()
+                video_format = quality_map.get(quality, "best")
             ydl_opts = {
                 'format': video_format,
                 'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
                 'progress_hooks': [progress_hook],
+                'ffmpeg_location': ffmpeg_path,
                 'quiet': True,
             }
         
