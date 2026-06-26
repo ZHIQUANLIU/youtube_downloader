@@ -180,6 +180,7 @@ class YouTubeDownloader:
         
         def download_thread():
             try:
+                is_bilibili = "bilibili" in url or "b23.tv" in url
                 if selected_format == "mp3":
                     ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
                     if not ffmpeg_path:
@@ -199,7 +200,7 @@ class YouTubeDownloader:
                     }
                 else:
                     quality = self.quality_var.get()
-                    if "bilibili" in url:
+                    if is_bilibili:
                         ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
                         video_format = "bestvideo+bestaudio/best"
                     else:
@@ -210,6 +211,12 @@ class YouTubeDownloader:
                         'outtmpl': os.path.join(folder_selected, '%(title)s.%(ext)s'),
                         'ffmpeg_location': ffmpeg_path,
                         'quiet': True,
+                    }
+                
+                if is_bilibili:
+                    ydl_opts['http_headers'] = {
+                        'Referer': 'https://www.bilibili.com/',
+                        'Origin': 'https://www.bilibili.com'
                     }
                 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -265,6 +272,7 @@ class YouTubeDownloader:
             
             try:
                 selected_format = self.format_var.get()
+                is_bilibili = "bilibili" in url or "b23.tv" in url
                 
                 if selected_format == "mp3":
                     ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
@@ -283,7 +291,7 @@ class YouTubeDownloader:
                         'quiet': True,
                     }
                 else:
-                    if "bilibili" in url:
+                    if is_bilibili:
                         ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
                         video_format = "bestvideo+bestaudio/best"
                     else:
@@ -295,6 +303,12 @@ class YouTubeDownloader:
                         'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
                         'ffmpeg_location': ffmpeg_path,
                         'quiet': True,
+                    }
+                
+                if is_bilibili:
+                    ydl_opts['http_headers'] = {
+                        'Referer': 'https://www.bilibili.com/',
+                        'Origin': 'https://www.bilibili.com'
                     }
                 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
