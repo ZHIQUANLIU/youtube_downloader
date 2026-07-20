@@ -184,7 +184,7 @@ class YouTubeDownloader:
                 if selected_format == "mp3":
                     ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
                     if not ffmpeg_path:
-                        self.root.after(0, messagebox.showerror, "错误", "下载 MP3 需要 FFmpeg")
+                        self.root.after(0, lambda: messagebox.showerror("错误", "下载 MP3 需要 FFmpeg"))
                         return
                     bitrate = self.bitrate_var.get()
                     ydl_opts = {
@@ -202,9 +202,15 @@ class YouTubeDownloader:
                     quality = self.quality_var.get()
                     if is_bilibili:
                         ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
+                        if not ffmpeg_path:
+                            self.root.after(0, lambda: messagebox.showerror("错误", "下载B站视频需要FFmpeg来合并音视频。\n请安装FFmpeg或将ffmpeg.exe放到程序目录的ffmpeg_bin文件夹中。"))
+                            return
                         video_format = "bestvideo+bestaudio/best"
                     else:
-                        ffmpeg_path = self.find_ffmpeg()
+                        if quality in ("1080p", "720p", "480p", "360p"):
+                            ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
+                        else:
+                            ffmpeg_path = self.find_ffmpeg()
                         video_format = quality_map.get(quality, "best")
                     ydl_opts = {
                         'format': video_format,
@@ -222,9 +228,12 @@ class YouTubeDownloader:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
                     video_title = info.get('title', '视频')
-                    self.root.after(0, self.download_complete, True, video_title)
+                    self.root.after(0, lambda: self.download_complete(True, video_title))
             except Exception as e:
-                self.root.after(0, self.download_complete, False, str(e))
+                error_msg = str(e)
+                if "ffmpeg" in error_msg.lower() and "not found" in error_msg.lower():
+                    error_msg = "需要FFmpeg来合并音视频，但无法自动下载。\n请手动下载FFmpeg后放到程序目录的ffmpeg_bin文件夹中。"
+                self.root.after(0, lambda: self.download_complete(False, error_msg))
         
         self.download_thread = threading.Thread(target=download_thread)
         self.download_thread.daemon = True
@@ -267,8 +276,8 @@ class YouTubeDownloader:
             if not url.strip():
                 continue
             
-            self.root.after(0, self.batch_status_label.configure, {"text": f"正在下载 {idx+1}/{total}: {url[:50]}..."})
-            self.root.after(0, self.batch_progress.set, (idx / total))
+            self.root.after(0, lambda t=url[:50], i=idx+1, n=total: self.batch_status_label.configure(text=f"正在下载 {i}/{n}: {t}..."))
+            self.root.after(0, lambda v=idx/total: self.batch_progress.set(v))
             
             try:
                 selected_format = self.format_var.get()
@@ -293,6 +302,8 @@ class YouTubeDownloader:
                 else:
                     if is_bilibili:
                         ffmpeg_path = self.download_and_extract_ffmpeg() if not self.find_ffmpeg() else self.find_ffmpeg()
+                        if not ffmpeg_path:
+                            raise Exception("下载B站视频需要 FFmpeg 来合并音视频")
                         video_format = "bestvideo+bestaudio/best"
                     else:
                         ffmpeg_path = self.find_ffmpeg()
@@ -318,9 +329,9 @@ class YouTubeDownloader:
                 failed_count += 1
                 print(f"下载失败 {url}: {e}")
         
-        self.root.after(0, self.batch_status_label.configure, {"text": f"完成: 成功 {success_count}, 失败 {failed_count}"})
-        self.root.after(0, self.batch_progress.set, 1)
-        self.root.after(0, messagebox.showinfo, "完成", f"批量下载完成!\n成功: {success_count}\n失败: {failed_count}")
+        self.root.after(0, lambda: self.batch_status_label.configure(text=f"完成: 成功 {success_count}, 失败 {failed_count}"))
+        self.root.after(0, lambda: self.batch_progress.set(1))
+        self.root.after(0, lambda: messagebox.showinfo("完成", f"批量下载完成!\n成功: {success_count}\n失败: {failed_count}"))
     
     def find_ffmpeg(self):
         ffmpeg = shutil.which("ffmpeg")
@@ -352,14 +363,28 @@ class YouTubeDownloader:
             return ffmpeg_dir
         
         try:
-            self.root.after(0, self.status_label.configure, {"text": "正在下载 FFmpeg..."})
+            self.root.after(0, lambda: self.status_label.configure(text="正在下载 FFmpeg..."))
             
             import urllib.request
             zip_path = os.path.join(ffmpeg_dir, "ffmpeg.zip")
             os.makedirs(ffmpeg_dir, exist_ok=True)
             
-            url = "https://github.com/btbn/ffmpeg-builds/releases/download/autobuild-2024-12-09-12-38/ffmpeg-master-latest-win64-gpl.zip"
-            urllib.request.urlretrieve(url, zip_path)
+            urls = [
+                "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip",
+                "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+            ]
+            
+            downloaded = False
+            for dl_url in urls:
+                try:
+                    urllib.request.urlretrieve(dl_url, zip_path)
+                    downloaded = True
+                    break
+                except:
+                    continue
+            
+            if not downloaded:
+                return None
             
             with zipfile.ZipFile(zip_path, 'r') as z:
                 for member in z.namelist():
